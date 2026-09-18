@@ -10,6 +10,7 @@ public final class OverlayController {
     private var assignments: [LabelAssignment] = []
     private var elementsByID: [String: ClickableElement] = [:]
     private var keyMonitor: Any?
+    private var hostingView: NSHostingView<OverlayRootView>?
     /// `ClickKind` is derived from the modifier flags held during the keystroke that
     /// completed the label (see `handleKeyPress`): Shift -> right click, Option -> double
     /// click, Command -> command click, no modifier -> left click.
@@ -18,6 +19,7 @@ public final class OverlayController {
     public init() {}
 
     public func show(elements: [ClickableElement], assignments: [LabelAssignment], on screenFrame: CGRect) {
+        dismiss()
         self.currentElements = elements
         self.assignments = assignments
         self.elementsByID = Dictionary(uniqueKeysWithValues: elements.map { ($0.stableID, $0) })
@@ -73,12 +75,18 @@ public final class OverlayController {
         keyMonitor = nil
         panel?.orderOut(nil)
         panel = nil
+        hostingView = nil
     }
 
     private func refreshOverlayContent() {
-        guard let panel else { return }
         let rootView = OverlayRootView(elements: currentElements, assignments: assignments, matchedPrefix: query)
-        panel.contentView = NSHostingView(rootView: rootView)
+        if let hostingView {
+            hostingView.rootView = rootView
+        } else {
+            let newHostingView = NSHostingView(rootView: rootView)
+            hostingView = newHostingView
+            panel?.contentView = newHostingView
+        }
     }
 
     private func clickKind(for modifierFlags: NSEvent.ModifierFlags) -> ClickKind {
