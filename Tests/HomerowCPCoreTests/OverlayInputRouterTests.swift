@@ -33,4 +33,29 @@ final class OverlayInputRouterTests: XCTestCase {
         let result = router.handle(character: "\u{1B}", currentQuery: "s", assignments: assignments)
         XCTAssertEqual(result, .dismiss)
     }
+
+    func test_engineOutputLabelsAreAllReachableViaRouter() {
+        let engine = LabelAssignmentEngine()
+        let elements = (0..<40).map { i in
+            ClickableElement(stableID: "id-\(i)", role: "AXButton", title: nil, frame: ElementFrame(x: Double(i), y: 0, width: 10, height: 10))
+        }
+        let assignments = engine.assignLabels(elements: elements)
+        let seamRouter = OverlayInputRouter()
+
+        for assignment in assignments {
+            var query = ""
+            var lastResult: OverlayInputResult = .noMatch
+            for char in assignment.label {
+                lastResult = seamRouter.handle(character: char, currentQuery: query, assignments: assignments)
+                if case .updatedQuery(let newQuery) = lastResult {
+                    query = newQuery
+                }
+            }
+            guard case .selected(let elementID) = lastResult else {
+                XCTFail("Label '\(assignment.label)' is not reachable via the router (got \(lastResult))")
+                continue
+            }
+            XCTAssertEqual(elementID, assignment.elementID, "Label '\(assignment.label)' selected the wrong element")
+        }
+    }
 }

@@ -49,13 +49,21 @@ public struct LabelAssignmentEngine {
     }
 
     private func generateLabelPool(count: Int) -> [String] {
-        var pool: [String] = Self.homeRowChars.map { String($0) }
-        if count > pool.count {
-            outer: for c1 in Self.homeRowChars {
-                for c2 in Self.homeRowChars {
-                    pool.append("\(c1)\(c2)")
-                    if pool.count >= count { break outer }
-                }
+        let chars = Self.homeRowChars
+        let m = chars.count
+        guard count > m else {
+            return chars.map { String($0) }
+        }
+
+        let rawSingleCount = (m * m - count) / (m - 1)
+        let singleCount = max(0, min(m, rawSingleCount))
+
+        var pool: [String] = chars.prefix(singleCount).map { String($0) }
+        let prefixChars = chars.suffix(m - singleCount)
+        outer: for c1 in prefixChars {
+            for c2 in chars {
+                pool.append("\(c1)\(c2)")
+                if pool.count >= count { break outer }
             }
         }
         return pool

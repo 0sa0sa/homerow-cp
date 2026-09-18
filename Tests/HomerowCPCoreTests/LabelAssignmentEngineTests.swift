@@ -39,7 +39,18 @@ final class LabelAssignmentEngineTests: XCTestCase {
         let engine = LabelAssignmentEngine()
         let elements = (1...15).map { makeElement("el\($0)") }
         let result = engine.assignLabels(elements: elements)
+        let oneCharCount = result.filter { $0.label.count == 1 }.count
         let twoCharCount = result.filter { $0.label.count == 2 }.count
-        XCTAssertEqual(twoCharCount, 15 - LabelAssignmentEngine.homeRowChars.count)
+        XCTAssertEqual(oneCharCount, 8)
+        XCTAssertEqual(twoCharCount, 7)
+
+        let labels = Set(result.map(\.label))
+        XCTAssertEqual(labels.count, result.count, "labels must be unique")
+        for shortLabel in labels where shortLabel.count == 1 {
+            XCTAssertFalse(
+                labels.contains { $0 != shortLabel && $0.hasPrefix(shortLabel) },
+                "single-char label \(shortLabel) must not be a prefix of another assigned label"
+            )
+        }
     }
 }

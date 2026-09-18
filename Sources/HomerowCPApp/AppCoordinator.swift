@@ -13,7 +13,7 @@ final class AppCoordinator {
     private let clickPerformer = LiveClickPerformer()
     private let scrollController = ScrollController()
     private let scrollPerformer = LiveScrollPerformer()
-    private var scrollModeMonitor: Any?
+    private let inputTap = InputTapController()
     private let frequencyTracker: FrequencyTracker
     private let labelEngine = LabelAssignmentEngine()
     private var previousLabels: [String: String] = [:]
@@ -36,31 +36,54 @@ final class AppCoordinator {
             return
         }
         indexer.start()
+
+        overlay.onSelect = { [weak self] element, kind in
+            guard let self else { return }
+            if let axElement = self.indexer.axElement(for: element.stableID) {
+                self.clickPerformer.perform(kind: kind, on: axElement, frame: element.frame)
+            }
+            self.frequencyTracker.recordSelection(elementID: element.stableID)
+            try? self.frequencyTracker.persist()
+        }
+        overlay.onDismiss = { [weak self] in self?.inputTap.exitToIdle() }
+
+        inputTap.onKeyDown = { [weak self] character, modifierFlags in
+            self?.routeTapKey(character, modifierFlags: modifierFlags)
+        }
+
         hotkeyManager.onActivate = { [weak self] in self?.activateOverlay() }
         hotkeyManager.register(combo: KeyComboParser.parse("cmd+shift+space")!)
 
         scrollHotkeyManager.onActivate = { [weak self] in self?.enterScrollMode() }
-        scrollHotkeyManager.register(combo: KeyComboParser.parse("shift+j")!)
+        scrollHotkeyManager.register(combo: KeyComboParser.parse("cmd+shift+j")!)
     }
 
-    private func enterScrollMode() {
-        guard scrollModeMonitor == nil else { return }
-        scrollModeMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            guard let self, let scalar = event.charactersIgnoringModifiers?.unicodeScalars.first else { return }
-            let key = Character(scalar)
-            if key == "\u{1B}" {
-                self.exitScrollMode()
+    private func routeTapKey(_ character: Character, modifierFlags: NSEvent.ModifierFlags) {
+        switch inputTap.mode {
+        case .idle:
+            return
+        case .hints:
+            overlay.handleKeyPress(character: character, modifierFlags: modifierFlags)
+        case .scroll:
+            if character == "\u{1B}" {
+                exitScrollMode()
                 return
             }
-            guard let direction = self.scrollController.direction(for: key) else { return }
-            let delta = self.scrollController.delta(for: direction)
-            self.scrollPerformer.scroll(dx: delta.dx, dy: delta.dy)
+            guard let direction = scrollController.direction(for: character) else { return }
+            let delta = scrollController.delta(for: direction)
+            scrollPerformer.scroll(dx: delta.dx, dy: delta.dy)
         }
     }
 
+    private func enterScrollMode() {
+        guard inputTap.mode != .scroll else { return }
+        if inputTap.mode == .hints { overlay.dismiss() }
+        inputTap.enter(.scroll)
+    }
+
     private func exitScrollMode() {
-        if let scrollModeMonitor { NSEvent.removeMonitor(scrollModeMonitor) }
-        scrollModeMonitor = nil
+        guard inputTap.mode == .scroll else { return }
+        inputTap.exitToIdle()
     }
 
     private func setUpStatusItem() {
@@ -84,11 +107,13 @@ final class AppCoordinator {
         }
         let view = PreferencesView(onResetFrequencyData: { [weak self] in
             self?.frequencyTracker.reset()
+            try? self?.frequencyTracker.persist()
             self?.previousLabels = [:]
         })
         let window = NSWindow(contentViewController: NSHostingController(rootView: view))
         window.title = "HomerowCP Preferences"
         window.styleMask = [.titled, .closable]
+        window.isReleasedWhenClosed = false
         preferencesWindow = window
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
@@ -99,30 +124,26 @@ final class AppCoordinator {
     }
 
     private func activateOverlay() {
+        exitScrollMode()
         let started = Date()
         guard let screen = NSScreen.main else { return }
         guard let key = indexer.lastCachedKey,
               let elements = cache.elements(for: key) else { return }
+        guard key.bundleID == NSWorkspace.shared.frontmostApplication?.bundleIdentifier else { return }
 
         var scores: [String: Double] = [:]
         for element in elements { scores[element.stableID] = frequencyTracker.score(for: element.stableID) }
         let assignments = labelEngine.assignLabels(elements: elements, frequencyScores: scores, previousAssignments: previousLabels)
         previousLabels = Dictionary(uniqueKeysWithValues: assignments.map { ($0.elementID, $0.label) })
 
-        overlay.onSelect = { [weak self] element, kind in
-            guard let self else { return }
-            if let axElement = self.indexer.axElement(for: element.stableID) {
-                self.clickPerformer.perform(kind: kind, on: axElement, frame: element.frame)
-            }
-            self.frequencyTracker.recordSelection(elementID: element.stableID)
-            try? self.frequencyTracker.persist()
-        }
         overlay.show(elements: elements, assignments: assignments, on: screen.frame)
+        inputTap.enter(.hints)
         latencyHUD.report(elapsed: Date().timeIntervalSince(started))
     }
 
     private func presentOnboarding() {
         let window = NSWindow(contentViewController: NSHostingController(rootView: OnboardingView()))
         window.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
     }
 }

@@ -9,12 +9,12 @@ public final class OverlayController {
     private var currentElements: [ClickableElement] = []
     private var assignments: [LabelAssignment] = []
     private var elementsByID: [String: ClickableElement] = [:]
-    private var keyMonitor: Any?
     private var hostingView: NSHostingView<OverlayRootView>?
     /// `ClickKind` is derived from the modifier flags held during the keystroke that
     /// completed the label (see `handleKeyPress`): Shift -> right click, Option -> double
     /// click, Command -> command click, no modifier -> left click.
     public var onSelect: ((ClickableElement, ClickKind) -> Void)?
+    public var onDismiss: (() -> Void)?
 
     public init() {}
 
@@ -35,19 +35,11 @@ public final class OverlayController {
         panel.backgroundColor = .clear
         panel.isOpaque = false
         panel.hasShadow = false
+        panel.ignoresMouseEvents = true
+        panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         self.panel = panel
         refreshOverlayContent()
         panel.orderFrontRegardless()
-
-        // The panel is a non-activating NSPanel so it never steals focus from the app
-        // underneath; keystrokes are instead captured system-wide via a global monitor
-        // (requires the Accessibility permission already granted for AXUIElement access)
-        // and routed into `handleKeyPress`, which drives the SwiftUI overlay purely from
-        // state (`query`) rather than first responder chains.
-        keyMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            guard let self, let scalar = event.charactersIgnoringModifiers?.unicodeScalars.first else { return }
-            self.handleKeyPress(character: Character(scalar), modifierFlags: event.modifierFlags)
-        }
     }
 
     public func handleKeyPress(character: Character, modifierFlags: NSEvent.ModifierFlags = []) {
@@ -55,10 +47,11 @@ public final class OverlayController {
         let result = router.handle(character: normalizedCharacter, currentQuery: query, assignments: assignments)
         switch result {
         case .selected(let elementID):
-            if let element = elementsByID[elementID] {
+            let element = elementsByID[elementID]
+            dismiss()
+            if let element {
                 onSelect?(element, clickKind(for: modifierFlags))
             }
-            dismiss()
         case .updatedQuery(let newQuery):
             query = newQuery
             refreshOverlayContent()
@@ -71,11 +64,11 @@ public final class OverlayController {
     }
 
     public func dismiss() {
-        if let keyMonitor { NSEvent.removeMonitor(keyMonitor) }
-        keyMonitor = nil
+        guard panel != nil else { return }
         panel?.orderOut(nil)
         panel = nil
         hostingView = nil
+        onDismiss?()
     }
 
     private func refreshOverlayContent() {
