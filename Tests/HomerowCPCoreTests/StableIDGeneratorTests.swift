@@ -36,4 +36,27 @@ final class StableIDGeneratorTests: XCTestCase {
         XCTAssertEqual(a.row, b.row)
         XCTAssertEqual(a.col, b.col)
     }
+
+    func test_nilTitleProducesValidID() {
+        let id = StableIDGenerator.makeID(
+            bundleID: "com.apple.finder", windowRole: "AXWindow",
+            elementRole: "AXButton", title: nil,
+            approximatePosition: (row: 1, col: 1)
+        )
+        XCTAssertFalse(id.isEmpty)
+    }
+
+    func test_differentPositionsProduceDifferentIDs() {
+        let id1 = StableIDGenerator.makeID(
+            bundleID: "com.apple.finder", windowRole: "AXWindow",
+            elementRole: "AXButton", title: "Save",
+            approximatePosition: (row: 1, col: 1)
+        )
+        let id2 = StableIDGenerator.makeID(
+            bundleID: "com.apple.finder", windowRole: "AXWindow",
+            elementRole: "AXButton", title: "Save",
+            approximatePosition: (row: 2, col: 5)
+        )
+        XCTAssertNotEqual(id1, id2)
+    }
 }
