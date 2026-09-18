@@ -21,16 +21,16 @@ final class HotkeyManager {
         let selfPtr = Unmanaged.passUnretained(self).toOpaque()
 
         InstallEventHandler(GetApplicationEventTarget(), { _, event, userData in
-            guard let userData, let event else { return noErr }
+            guard let userData, let event else { return OSStatus(eventNotHandledErr) }
             var receivedID = EventHotKeyID()
             let status = GetEventParameter(
                 event, EventParamName(kEventParamDirectObject), EventParamType(typeEventHotKeyID),
                 nil, MemoryLayout<EventHotKeyID>.size, nil, &receivedID
             )
-            guard status == noErr else { return status }
+            guard status == noErr else { return OSStatus(eventNotHandledErr) }
 
             let manager = Unmanaged<HotkeyManager>.fromOpaque(userData).takeUnretainedValue()
-            guard receivedID.id == manager.hotKeyID else { return noErr }
+            guard receivedID.id == manager.hotKeyID else { return OSStatus(eventNotHandledErr) }
             manager.onActivate?()
             return noErr
         }, 1, &eventSpec, selfPtr, &eventHandlerRef)
