@@ -8,18 +8,25 @@ public final class AccessibilityIndexer {
     private var currentAppElement: AXUIElement?
     private var currentBundleID: String?
     private var workspaceToken: NSObjectProtocol?
-    public private(set) var lastCachedKey: WindowKey?
+    private let stateLock = NSLock()
+    private var _lastCachedKey: WindowKey?
     private var axElementLookup: [String: AXUIElement] = [:]
 
     public init(cache: WindowCache) {
         self.cache = cache
     }
 
+    public var lastCachedKey: WindowKey? {
+        stateLock.lock(); defer { stateLock.unlock() }
+        return _lastCachedKey
+    }
+
     /// The live `AXUIElement` for a previously scanned `ClickableElement.stableID`,
     /// valid only until the next rescan of that window. Used by `ActionExecutor`/
     /// `LiveClickPerformer` to actually perform a click on the element the user selected.
     public func axElement(for stableID: String) -> AXUIElement? {
-        axElementLookup[stableID]
+        stateLock.lock(); defer { stateLock.unlock() }
+        return axElementLookup[stableID]
     }
 
     public func start() {
@@ -96,10 +103,10 @@ public final class AccessibilityIndexer {
             let key = WindowKey(bundleID: bundleID, windowID: windowID)
 
             self.cache.update(elements, for: key)
-            DispatchQueue.main.async {
-                self.lastCachedKey = key
-                self.axElementLookup = lookup
-            }
+            self.stateLock.lock()
+            self._lastCachedKey = key
+            self.axElementLookup = lookup
+            self.stateLock.unlock()
         }
     }
 }
