@@ -49,7 +49,8 @@ public final class OverlayController {
     }
 
     public func handleKeyPress(character: Character, modifierFlags: NSEvent.ModifierFlags = []) {
-        let result = router.handle(character: character, currentQuery: query, assignments: assignments)
+        let normalizedCharacter = Character(String(character).lowercased())
+        let result = router.handle(character: normalizedCharacter, currentQuery: query, assignments: assignments)
         switch result {
         case .selected(let elementID):
             if let element = elementsByID[elementID] {
