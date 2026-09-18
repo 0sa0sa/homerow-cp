@@ -13,7 +13,7 @@ let package = Package(
         ),
         .target(
             name: "HomerowCPUI",
-            dependencies: ["HomerowCPCore"],
+            dependencies: ["HomerowCPCore", "HomerowCPAccessibility"],
             path: "Sources/HomerowCPUI"
         ),
         .executableTarget(
