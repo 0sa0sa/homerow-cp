@@ -6,6 +6,7 @@ public final class OverlayController {
     private var panel: NSPanel?
     private let router = OverlayInputRouter()
     private var query = ""
+    private var currentElements: [ClickableElement] = []
     private var assignments: [LabelAssignment] = []
     private var elementsByID: [String: ClickableElement] = [:]
     private var keyMonitor: Any?
@@ -17,6 +18,7 @@ public final class OverlayController {
     public init() {}
 
     public func show(elements: [ClickableElement], assignments: [LabelAssignment], on screenFrame: CGRect) {
+        self.currentElements = elements
         self.assignments = assignments
         self.elementsByID = Dictionary(uniqueKeysWithValues: elements.map { ($0.stableID, $0) })
         query = ""
@@ -31,11 +33,9 @@ public final class OverlayController {
         panel.backgroundColor = .clear
         panel.isOpaque = false
         panel.hasShadow = false
-
-        let rootView = OverlayRootView(elements: elements, assignments: assignments, matchedPrefix: query)
-        panel.contentView = NSHostingView(rootView: rootView)
-        panel.orderFrontRegardless()
         self.panel = panel
+        refreshOverlayContent()
+        panel.orderFrontRegardless()
 
         // The panel is a non-activating NSPanel so it never steals focus from the app
         // underneath; keystrokes are instead captured system-wide via a global monitor
@@ -58,8 +58,10 @@ public final class OverlayController {
             dismiss()
         case .updatedQuery(let newQuery):
             query = newQuery
+            refreshOverlayContent()
         case .noMatch:
             query = ""
+            refreshOverlayContent()
         case .dismiss:
             dismiss()
         }
@@ -70,6 +72,12 @@ public final class OverlayController {
         keyMonitor = nil
         panel?.orderOut(nil)
         panel = nil
+    }
+
+    private func refreshOverlayContent() {
+        guard let panel else { return }
+        let rootView = OverlayRootView(elements: currentElements, assignments: assignments, matchedPrefix: query)
+        panel.contentView = NSHostingView(rootView: rootView)
     }
 
     private func clickKind(for modifierFlags: NSEvent.ModifierFlags) -> ClickKind {
