@@ -1917,8 +1917,9 @@ git commit -m "feat: add preferences window with tabbed sections"
 - Create: `Scripts/build_app_bundle.sh`
 
 **Interfaces:**
-- Consumes: すべての先行タスクの型(`AccessibilityIndexer`, `WindowCache`, `HotkeyManager`, `OverlayController`, `LiveClickPerformer`, `LiveScrollPerformer`, `FrequencyTracker`, `LabelAssignmentEngine`, `SearchFilter`, `AccessibilityPermission`, `OnboardingView`, `PreferencesView(onResetFrequencyData:)`)
+- Consumes: すべての先行タスクの型(`AccessibilityIndexer`, `WindowCache`, `HotkeyManager`, `OverlayController`, `LiveClickPerformer`, `ScrollController`, `LiveScrollPerformer`, `FrequencyTracker`, `LabelAssignmentEngine`, `SearchFilter`, `AccessibilityPermission`, `OnboardingView`, `PreferencesView(onResetFrequencyData:)`)
 - メニューバー(`NSStatusItem`)に「Preferences...」「Quit」を持つメニューを追加し、`PreferencesView`を開く導線をここで初めて配線する(Task 13時点では未配線)。
+- `Shift+J`用に2つ目の`HotkeyManager`インスタンスを登録し、スクロールモードを開始する導線をここで初めて配線する(Task 11時点では`ScrollController`/`LiveScrollPerformer`は単体でテストされるのみで、実際に呼び出す経路がなかった)。
 
 - [ ] **Step 1: AppCoordinatorを実装**
 
@@ -1934,8 +1935,12 @@ final class AppCoordinator {
     private let cache = WindowCache()
     private let indexer: AccessibilityIndexer
     private let hotkeyManager = HotkeyManager()
+    private let scrollHotkeyManager = HotkeyManager()
     private let overlay = OverlayController()
     private let clickPerformer = LiveClickPerformer()
+    private let scrollController = ScrollController()
+    private let scrollPerformer = LiveScrollPerformer()
+    private var scrollModeMonitor: Any?
     private let frequencyTracker: FrequencyTracker
     private let labelEngine = LabelAssignmentEngine()
     private var previousLabels: [String: String] = [:]
@@ -1960,6 +1965,29 @@ final class AppCoordinator {
         indexer.start()
         hotkeyManager.onActivate = { [weak self] in self?.activateOverlay() }
         hotkeyManager.register(combo: KeyComboParser.parse("cmd+shift+space")!)
+
+        scrollHotkeyManager.onActivate = { [weak self] in self?.enterScrollMode() }
+        scrollHotkeyManager.register(combo: KeyComboParser.parse("shift+j")!)
+    }
+
+    private func enterScrollMode() {
+        guard scrollModeMonitor == nil else { return }
+        scrollModeMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            guard let self, let scalar = event.charactersIgnoringModifiers?.unicodeScalars.first else { return }
+            let key = Character(scalar)
+            if key == "\u{1B}" {
+                self.exitScrollMode()
+                return
+            }
+            guard let direction = self.scrollController.direction(for: key) else { return }
+            let delta = self.scrollController.delta(for: direction)
+            self.scrollPerformer.scroll(dx: delta.dx, dy: delta.dy)
+        }
+    }
+
+    private func exitScrollMode() {
+        if let scrollModeMonitor { NSEvent.removeMonitor(scrollModeMonitor) }
+        scrollModeMonitor = nil
     }
 
     private func setUpStatusItem() {
