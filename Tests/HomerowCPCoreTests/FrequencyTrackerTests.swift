@@ -24,6 +24,21 @@ final class FrequencyTrackerTests: XCTestCase {
         XCTAssertEqual(tracker.score(for: "el1"), 0.25, accuracy: 0.0001) // 1 * 0.5^2
     }
 
+    func test_multipleDecayPassesDoNotCompound() {
+        let tracker = FrequencyTracker(storeURL: tempStoreURL(), decayFactor: 0.5)
+        let day0 = Date(timeIntervalSince1970: 0)
+        tracker.recordSelection(elementID: "el1", now: day0)
+
+        let day2 = day0.addingTimeInterval(2 * 24 * 60 * 60)
+        tracker.recordSelection(elementID: "el2", now: day2) // triggers first decay pass on el1
+
+        let day4 = day0.addingTimeInterval(4 * 24 * 60 * 60)
+        tracker.recordSelection(elementID: "el3", now: day4) // triggers second decay pass on el1
+
+        // A single continuous 4-day decay from day0, not two compounding partial decays
+        XCTAssertEqual(tracker.score(for: "el1"), 1 * pow(0.5, 4.0), accuracy: 0.0001)
+    }
+
     func test_persistAndReloadRoundTrips() throws {
         let url = tempStoreURL()
         let tracker = FrequencyTracker(storeURL: url)

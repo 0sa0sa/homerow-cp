@@ -44,6 +44,7 @@ public final class FrequencyTracker {
             guard days > 0 else { continue }
             var updated = record
             updated.count *= pow(decayFactor, Double(days))
+            updated.lastUsed = now
             records[id] = updated
         }
     }
