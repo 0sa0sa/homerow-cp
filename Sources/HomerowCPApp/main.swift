@@ -1,3 +1,7 @@
-import HomerowCPCore
+import AppKit
 
-print("HomerowCP \(HomerowCPCore.version) starting...")
+let app = NSApplication.shared
+app.setActivationPolicy(.accessory) // メニューバー常駐、Dockアイコンなし
+let coordinator = AppCoordinator()
+coordinator.start()
+app.run()
