@@ -1,2 +1,4 @@
-.worktrees/
-.superpowers/
+.build/
+.swiftpm/
+*.xcodeproj
+.DS_Store
