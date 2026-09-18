@@ -51,11 +51,15 @@ final class AppCoordinator {
             self?.routeTapKey(character, modifierFlags: modifierFlags)
         }
 
+        let activationCombo = KeyComboParser.parse("cmd+shift+space")!
+        let scrollCombo = KeyComboParser.parse("cmd+shift+j")!
+        inputTap.registerPassthroughHotkeys([activationCombo, scrollCombo])
+
         hotkeyManager.onActivate = { [weak self] in self?.activateOverlay() }
-        hotkeyManager.register(combo: KeyComboParser.parse("cmd+shift+space")!)
+        hotkeyManager.register(combo: activationCombo)
 
         scrollHotkeyManager.onActivate = { [weak self] in self?.enterScrollMode() }
-        scrollHotkeyManager.register(combo: KeyComboParser.parse("cmd+shift+j")!)
+        scrollHotkeyManager.register(combo: scrollCombo)
     }
 
     private func routeTapKey(_ character: Character, modifierFlags: NSEvent.ModifierFlags) {
