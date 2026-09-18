@@ -1917,7 +1917,8 @@ git commit -m "feat: add preferences window with tabbed sections"
 - Create: `Scripts/build_app_bundle.sh`
 
 **Interfaces:**
-- Consumes: すべての先行タスクの型(`AccessibilityIndexer`, `WindowCache`, `HotkeyManager`, `OverlayController`, `LiveClickPerformer`, `LiveScrollPerformer`, `FrequencyTracker`, `LabelAssignmentEngine`, `SearchFilter`, `AccessibilityPermission`, `OnboardingView`, `PreferencesView`)
+- Consumes: すべての先行タスクの型(`AccessibilityIndexer`, `WindowCache`, `HotkeyManager`, `OverlayController`, `LiveClickPerformer`, `LiveScrollPerformer`, `FrequencyTracker`, `LabelAssignmentEngine`, `SearchFilter`, `AccessibilityPermission`, `OnboardingView`, `PreferencesView(onResetFrequencyData:)`)
+- メニューバー(`NSStatusItem`)に「Preferences...」「Quit」を持つメニューを追加し、`PreferencesView`を開く導線をここで初めて配線する(Task 13時点では未配線)。
 
 - [ ] **Step 1: AppCoordinatorを実装**
 
@@ -1939,6 +1940,8 @@ final class AppCoordinator {
     private let labelEngine = LabelAssignmentEngine()
     private var previousLabels: [String: String] = [:]
     private let latencyHUD = LatencyHUD()
+    private var statusItem: NSStatusItem?
+    private var preferencesWindow: NSWindow?
 
     init() {
         indexer = AccessibilityIndexer(cache: cache)
@@ -1949,6 +1952,7 @@ final class AppCoordinator {
     }
 
     func start() {
+        setUpStatusItem()
         guard AccessibilityPermission.isTrusted(promptIfNeeded: true) else {
             presentOnboarding()
             return
@@ -1956,6 +1960,41 @@ final class AppCoordinator {
         indexer.start()
         hotkeyManager.onActivate = { [weak self] in self?.activateOverlay() }
         hotkeyManager.register(combo: KeyComboParser.parse("cmd+shift+space")!)
+    }
+
+    private func setUpStatusItem() {
+        let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
+        item.button?.title = "⌨"
+
+        let menu = NSMenu()
+        menu.addItem(withTitle: "Preferences...", action: #selector(showPreferences), keyEquivalent: ",")
+        menu.addItem(.separator())
+        menu.addItem(withTitle: "Quit HomerowCP", action: #selector(quit), keyEquivalent: "q")
+        for menuItem in menu.items { menuItem.target = self }
+        item.menu = menu
+        statusItem = item
+    }
+
+    @objc private func showPreferences() {
+        if let preferencesWindow {
+            preferencesWindow.makeKeyAndOrderFront(nil)
+            NSApp.activate(ignoringOtherApps: true)
+            return
+        }
+        let view = PreferencesView(onResetFrequencyData: { [weak self] in
+            self?.frequencyTracker.reset()
+            self?.previousLabels = [:]
+        })
+        let window = NSWindow(contentViewController: NSHostingController(rootView: view))
+        window.title = "HomerowCP Preferences"
+        window.styleMask = [.titled, .closable]
+        preferencesWindow = window
+        window.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+    }
+
+    @objc private func quit() {
+        NSApp.terminate(nil)
     }
 
     private func activateOverlay() {
